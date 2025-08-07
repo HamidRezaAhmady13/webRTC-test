@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>WebRTC Manual Signaling</title>
+    <style>
+      video {
+        width: 300px;
+        margin: 10px;
+        border: 1px solid #ccc;
+      }
+      textarea {
+        width: 100%;
+        height: 100px;
+        margin-top: 10px;
+      }
+      button {
+        margin: 5px 0;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>WebRTC Manual Signaling</h2>
+
+    <div>
+      <h3>Local Video</h3>
+      <video id="localVideo" autoplay muted></video>
+    </div>
+    <div>
+      <h3>Remote Video</h3>
+      <video id="remoteVideo" autoplay></video>
+    </div>
+
+    <hr />
+
+    <h3>SDP Offer</h3>
+    <button onclick="createOffer()">Create Offer</button>
+    <textarea
+      id="localOffer"
+      placeholder="Your SDP offer will appear here"
+    ></textarea>
+
+    <h3>Paste Remote Offer</h3>
+    <textarea
+      id="remoteOffer"
+      placeholder="Paste remote SDP offer here"
+    ></textarea>
+    <button onclick="acceptOffer()">Accept Offer</button>
+
+    <h3>SDP Answer</h3>
+    <textarea
+      id="localAnswer"
+      placeholder="Your SDP answer will appear here"
+    ></textarea>
+
+    <h3>Paste Remote Answer</h3>
+    <textarea
+      id="remoteAnswer"
+      placeholder="Paste remote SDP answer here"
+    ></textarea>
+    <button onclick="acceptAnswer()">Accept Answer</button>
+
+    <hr />
+
+    <h3>ICE Candidates</h3>
+    <textarea
+      id="iceCandidates"
+      placeholder="Paste remote ICE candidates here (one per line)"
+    ></textarea>
+    <button onclick="addIceCandidates()">Add ICE Candidates</button>
+
+    <script>
+      const localVideo = document.getElementById("localVideo");
+      const remoteVideo = document.getElementById("remoteVideo");
+
+      const peer = new RTCPeerConnection();
+      const iceCandidates = [];
+
+      // Show remote stream
+      peer.ontrack = (event) => {
+        console.log(event);
+
+        remoteVideo.srcObject = event.streams[0];
+      };
+
+      // Log ICE candidates
+      peer.onicecandidate = (event) => {
+        if (event.candidate) {
+          console.log("ICE Candidate:", JSON.stringify(event.candidate));
+          iceCandidates.push(event.candidate);
+        }
+      };
+
+      // Show final SDP with ICE
+      peer.onicegatheringstatechange = () => {
+        if (peer.iceGatheringState === "complete") {
+          console.log(
+            "Final SDP with ICE:",
+            JSON.stringify(peer.localDescription)
+          );
+        }
+      };
+
+      // Get media and add tracks
+      navigator.mediaDevices
+        .getUserMedia({ video: true, audio: true })
+        .then((stream) => {
+          localVideo.srcObject = stream;
+          console.log("Stream:", stream);
+          stream.getTracks().forEach((track) => {
+            console.log("Track:", track);
+            peer.addTrack(track, stream);
+          });
+        })
+        .catch((err) => {
+          console.error("Error occurred:", err);
+        });
+
+      // Create offer
+      function createOffer() {
+        peer
+          .createOffer()
+          .then((offer) => peer.setLocalDescription(offer))
+          .then(() => {
+            document.getElementById("localOffer").value = JSON.stringify(
+              peer.localDescription
+            );
+          })
+          .catch((err) => {
+            console.error("Error occurred:", err);
+          });
+      }
+
+      // Accept remote offer and create answer
+      function acceptOffer() {
+        const offerText = document.getElementById("remoteOffer").value;
+        const offer = JSON.parse(offerText);
+
+        peer
+          .setRemoteDescription(new RTCSessionDescription(offer))
+          .then(() => peer.createAnswer())
+          .then((answer) => peer.setLocalDescription(answer))
+          .then(() => {
+            document.getElementById("localAnswer").value = JSON.stringify(
+              peer.localDescription
+            );
+          });
+      }
+
+      // Accept remote answer
+      function acceptAnswer() {
+        const answerText = document.getElementById("remoteAnswer").value;
+        const answer = JSON.parse(answerText);
+        peer.setRemoteDescription(new RTCSessionDescription(answer));
+      }
+
+      // Add ICE candidates manually
+      function addIceCandidates() {
+        const lines = document
+          .getElementById("iceCandidates")
+          .value.trim()
+          .split("\n");
+        lines.forEach((line) => {
+          if (line) {
+            const candidate = JSON.parse(line);
+            peer.addIceCandidate(new RTCIceCandidate(candidate));
+          }
+        });
+      }
+    </script>
+  </body>
+</html>
